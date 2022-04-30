@@ -6,18 +6,20 @@ import android.widget.LinearLayout
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.mohamadjavadx.ftsandroidimplementation.databinding.ActivityMainBinding
-import com.mohamadjavadx.ftsandroidimplementation.ftsHelper.Condition
-import com.mohamadjavadx.ftsandroidimplementation.ftsHelper.Condition.Operator.OR
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val mainViewModel: MainViewModel by viewModels()
+    private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,8 +29,14 @@ class MainActivity : AppCompatActivity() {
 
 
         val noteAdapter = NoteAdapter {
-            mainViewModel.deleteNote(it.id)
+            viewModel.deleteNote(it.id)
         }
+
+        val queriesAdapter = QueriesAdapter(
+            delete = {
+                viewModel.removeQuery(it)
+            }
+        )
 
         binding.rvResults.apply {
             setHasFixedSize(true)
@@ -36,34 +44,53 @@ class MainActivity : AppCompatActivity() {
             adapter = noteAdapter
         }
 
-        mainViewModel.searchResult.observe(this) {
-            noteAdapter.submitList(it)
-        }
-
-        val conditionAdapter = ConditionAdapter(
-            update = {
-                mainViewModel.addCondition(it)
-            },
-            delete = {
-                mainViewModel.removeCondition(it)
-            }
-        )
-
         binding.rvQueries.apply {
             setHasFixedSize(true)
             layoutManager = LinearLayoutManager(context)
-            adapter = conditionAdapter
+            adapter = queriesAdapter
         }
 
-        mainViewModel.allConditions.observe(this) {
-            conditionAdapter.submitList(it)
+        binding.rbOr.setOnClickListener {
+            viewModel.updateSearchOperator(MainUiState.Operator.OR)
+        }
+
+        binding.rbAnd.setOnClickListener {
+            viewModel.updateSearchOperator(MainUiState.Operator.AND)
+        }
+
+        binding.cbPhrase.setOnClickListener {
+            viewModel.updatePhraseState()
+        }
+
+        binding.cbSanitize.setOnClickListener {
+            viewModel.updateSanitizedState()
         }
 
         binding.btnAdd.setOnClickListener {
             val value = (binding.etSearch.text).toString().trim()
             if (value.isNotEmpty()) {
-                mainViewModel.addCondition(Condition(value, OR))
+                viewModel.addQuery(value)
                 binding.etSearch.text = null
+            }
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.state.collect {
+                    noteAdapter.submitList(it.results.toList())
+                    queriesAdapter.submitList(it.queries.toList())
+
+                    when (it.searchOperator) {
+                        MainUiState.Operator.AND -> binding.tgSearchMood.check(binding.rbAnd.id)
+                        MainUiState.Operator.OR -> binding.tgSearchMood.check(binding.rbOr.id)
+                    }
+
+                    binding.cbPhrase.isEnabled = it.isSanitized
+                    binding.cbPhrase.isChecked = it.isPhrase
+                    binding.cbSanitize.isChecked = it.isSanitized
+
+                    binding.tvQueryString.text = "queryString: ${it.queryString}"
+                }
             }
         }
 
@@ -87,45 +114,12 @@ class MainActivity : AppCompatActivity() {
                     val title = tvTitle.text?.toString()?.trim() ?: ""
                     val details = tvDetails.text?.toString()?.trim() ?: ""
                     if (title.isNotEmpty() && details.isNotEmpty()) {
-                        mainViewModel.addNote(title, details)
+                        viewModel.addNote(title, details)
                     }
                 }
                 .setNegativeButton("Cancel") { dialog, _ -> dialog.cancel() }
                 .show()
         }
-
-
-//        mainViewModel.addCondition(Condition("11", OR))
-//        mainViewModel.addCondition(Condition("22", OR))
-//        mainViewModel.addCondition(Condition("33", OR))
-//        mainViewModel.addCondition(Condition("44", OR))
-//        mainViewModel.addCondition(Condition("55", OR))
-//        mainViewModel.addCondition(Condition("66", OR))
-//        mainViewModel.addCondition(Condition("77", OR))
-//        mainViewModel.addCondition(Condition("88", OR))
-//        mainViewModel.addCondition(Condition("99", OR))
-
-//        mainViewModel.addNote("1","test 1 8 6")
-//        mainViewModel.addNote("2","test 2 4 5")
-//        mainViewModel.addNote("3","test 3 7 9")
-//        mainViewModel.addNote("4","test 4 3 2")
-//        mainViewModel.addNote("5","test 5 1 2")
-//        mainViewModel.addNote("6","test 6 4 3")
-//        mainViewModel.addNote("7","test 7 5 6")
-//        mainViewModel.addNote("8","test 8 4 8")
-//        mainViewModel.addNote("9","test 9 6 7")
-
-
-//        mainViewModel.addNote("11", "test 1 88 6")
-//        mainViewModel.addNote("22", "test 2 4 55")
-//        mainViewModel.addNote("33", "test 3 7 99")
-//        mainViewModel.addNote("44", "test 4 3 22")
-//        mainViewModel.addNote("55", "test 5 11 2")
-//        mainViewModel.addNote("66", "test 6 4 33")
-//        mainViewModel.addNote("77", "test 77 5 6")
-//        mainViewModel.addNote("88", "test 8 44 8")
-//        mainViewModel.addNote("99", "test 9 66 7")
-
     }
 
 }

@@ -1,6 +1,5 @@
 package com.mohamadjavadx.ftsandroidimplementation.datasource.local
 
-import androidx.lifecycle.liveData
 import com.couchbase.lite.*
 import com.mohamadjavadx.ftsandroidimplementation.model.Note
 import java.util.*
@@ -48,12 +47,6 @@ constructor(
         return result.isSuccess
     }
 
-    fun deleteAllNotes() {
-        getAllNotes().forEach {
-            deleteNote(it.id)
-        }
-    }
-
     fun getAllNotes(): List<Note> {
         val query: Query = database.createQuery(
             """
@@ -68,10 +61,6 @@ constructor(
                 details = it.getString(Note::details.name)!!
             )
         }
-    }
-
-    fun getAllNotesAsLiveData() = liveData<List<Note>> {
-        emit(getAllNotes())
     }
 
     fun search(queryString: String): List<Note> {
@@ -90,10 +79,6 @@ constructor(
                 details = it.getString(Note::details.name)!!
             )
         }
-    }
-
-    fun searchAsLiveData(queryString: String) = liveData<List<Note>> {
-        emit(search(queryString))
     }
 
 }

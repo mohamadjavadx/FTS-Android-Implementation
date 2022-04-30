@@ -1,11 +1,15 @@
 package com.mohamadjavadx.ftsandroidimplementation.presentation.main
 
-import androidx.lifecycle.*
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.mohamadjavadx.ftsandroidimplementation.datasource.local.NoteDao
-import com.mohamadjavadx.ftsandroidimplementation.ftsHelper.Condition
-import com.mohamadjavadx.ftsandroidimplementation.ftsHelper.ConditionManager
-import com.mohamadjavadx.ftsandroidimplementation.model.Note
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.util.*
 import javax.inject.Inject
 
@@ -14,44 +18,98 @@ class MainViewModel
 @Inject
 constructor(
     private val noteDao: NoteDao,
-    private val conditionManager: ConditionManager,
 ) : ViewModel() {
 
-    private val _refresh = MutableLiveData<Unit>(Unit)
-    private val refresh: LiveData<Unit> = _refresh
+    private var _state: MutableStateFlow<MainUiState> = MutableStateFlow(
+        MainUiState(
+            results = noteDao.getAllNotes()
+        )
+    )
+    val state: StateFlow<MainUiState> = _state.asStateFlow()
 
-    fun addNote(title: String, details: String) = noteDao.saveNote(title, details).also {
-        _refresh.value = Unit
-    }
+    private var searchJob: Job? = null
 
-    fun deleteNote(id: UUID) = noteDao.deleteNote(id).also {
-        _refresh.value = Unit
-    }
-
-    fun deleteAllNotes() = noteDao.deleteAllNotes().also {
-        _refresh.value = Unit
-    }
-
-    fun addCondition(condition: Condition) = conditionManager.addOrUpdateCondition(condition).also {
-        _refresh.value = Unit
-    }
-
-    fun removeCondition(condition: Condition) = conditionManager.removeCondition(condition).also {
-        _refresh.value = Unit
-    }
-
-    val searchResult: LiveData<List<Note>> = Transformations.switchMap(refresh) {
-        if (conditionManager.generateQueryString().isEmpty()) {
-            noteDao.getAllNotesAsLiveData()
-        } else {
-            noteDao.searchAsLiveData(conditionManager.generateQueryString())
+    fun addNote(title: String, details: String): UUID {
+        return noteDao.saveNote(title, details).also {
+            preformSearch()
         }
     }
 
-    val allConditions: LiveData<List<Condition>> = Transformations.switchMap(refresh) {
-        liveData {
-            emit(conditionManager.allConditions.toList())
+    fun deleteNote(id: UUID) {
+        noteDao.deleteNote(id)
+        preformSearch()
+    }
+
+    fun addQuery(query: String) {
+        _state.update {
+            it.copy(queries = it.queries + query)
         }
+        preformSearch()
+    }
+
+    fun removeQuery(query: String) {
+        _state.update {
+            it.copy(queries = it.queries - query)
+        }
+        preformSearch()
+    }
+
+    fun updateSearchOperator(operator: MainUiState.Operator) {
+        _state.update {
+            it.copy(searchOperator = operator)
+        }
+        preformSearch()
+    }
+
+    fun updateSanitizedState() {
+        _state.update {
+            val isPhrase = if (it.isSanitized) true else it.isPhrase
+            it.copy(isSanitized = !it.isSanitized, isPhrase = isPhrase)
+        }
+        preformSearch()
+    }
+
+    fun updatePhraseState() {
+        _state.update {
+            it.copy(isPhrase = !it.isPhrase)
+        }
+        preformSearch()
+    }
+
+    private fun preformSearch() {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            var queryString = ""
+            _state.value.queries.forEach { query ->
+                if (queryString.isNotEmpty()) {
+                    queryString += "${_state.value.searchOperator}"
+                }
+                queryString += when {
+                    _state.value.isPhrase && _state.value.isSanitized -> {
+                        "(\"${query}\")"
+                    }
+                    _state.value.isSanitized -> {
+                        "(${query})"
+                    }
+                    else -> {
+                        "(${sanitizeQuery(query)})"
+                    }
+                }
+            }
+            _state.update {
+                it.copy(
+                    queryString = queryString,
+                    results = if (it.queries.isEmpty()) noteDao.getAllNotes() else noteDao.search(
+                        queryString
+                    )
+                )
+            }
+        }
+    }
+
+    private fun sanitizeQuery(query: String): String {
+        val queryWithEscapedQuotes = query.replace(Regex.fromLiteral("\""), "\"\"")
+        return "*\"$queryWithEscapedQuotes\"*"
     }
 
 }
