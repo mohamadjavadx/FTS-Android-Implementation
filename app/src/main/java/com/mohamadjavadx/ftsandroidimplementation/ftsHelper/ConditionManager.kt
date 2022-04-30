@@ -45,11 +45,7 @@ class ConditionManager @Inject constructor() {
             queryString += generateQueryForANDConditions()
         } else {
             queryString += generateQueryForANDConditions()
-            if (conditionsWithANDOperator.size == 1 && conditionsWithOROperator.size > 1) {
-                queryString += " OR (${generateQueryForANDConditions()} AND ${generateQueryForORConditions()})"
-            } else {
-                queryString += " OR (${generateQueryForANDConditions()} AND ${generateQueryForORConditions()})"
-            }
+            queryString += " OR (${generateQueryForANDConditions()} AND ${generateQueryForORConditions()})"
         }
         return queryString
     }
