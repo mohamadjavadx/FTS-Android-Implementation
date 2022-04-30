@@ -40,10 +40,6 @@ constructor(
         _refresh.value = Unit
     }
 
-    fun clearConditions(condition: Condition) = conditionManager.clearConditions().also {
-        _refresh.value = Unit
-    }
-
     val searchResult: LiveData<List<Note>> = Transformations.switchMap(refresh) {
         if (conditionManager.generateQueryString().isEmpty()) {
             noteDao.getAllNotesAsLiveData()

@@ -4,7 +4,9 @@ import dagger.hilt.android.scopes.ViewModelScoped
 import javax.inject.Inject
 
 @ViewModelScoped
-class ConditionManager @Inject constructor() {
+class ConditionManager
+@Inject
+constructor() {
 
     private val conditionsWithOROperator: MutableSet<Condition> = mutableSetOf()
     private val conditionsWithANDOperator: MutableSet<Condition> = mutableSetOf()
@@ -28,52 +30,45 @@ class ConditionManager @Inject constructor() {
         conditionsWithOROperator.remove(condition)
     }
 
-    fun clearConditions() {
-        conditionsWithOROperator.clear()
-        conditionsWithANDOperator.clear()
-    }
-
     fun generateQueryString(): String {
         var queryString = ""
-
-        if (conditionsWithANDOperator.size == 0 && conditionsWithOROperator.size == 0) {
-            return ""
-        }
-        if (conditionsWithANDOperator.size == 0) {
-            queryString += generateQueryForORConditions()
-        } else if (conditionsWithOROperator.size == 0) {
-            queryString += generateQueryForANDConditions()
-        } else {
-            queryString += generateQueryForANDConditions()
-            queryString += " OR (${generateQueryForANDConditions()} AND ${generateQueryForORConditions()})"
+        when {
+            conditionsWithANDOperator.isEmpty() && conditionsWithOROperator.isEmpty() -> {
+                return queryString
+            }
+            conditionsWithANDOperator.isEmpty() -> {
+                queryString += generateQueryForORConditions()
+            }
+            conditionsWithOROperator.isEmpty() -> {
+                queryString += generateQueryForANDConditions()
+            }
+            else -> {
+                queryString += generateQueryForANDConditions()
+                queryString += " OR (${generateQueryForANDConditions()} AND ${generateQueryForORConditions()})"
+            }
         }
         return queryString
     }
 
-    fun generateQueryForORConditions(): String {
+    private fun generateQueryForORConditions(): String {
         var queryString = "("
-        var conditionsCount = 0
-        conditionsWithOROperator.forEach { condition ->
-            if (conditionsCount != 0) {
+        conditionsWithOROperator.forEachIndexed { index, condition ->
+            if (index != 0) {
                 queryString += " OR "
             }
             queryString += "(${condition.sanitizeValue()})"
-            conditionsCount++
         }
         queryString += ")"
         return queryString
     }
 
-
-    fun generateQueryForANDConditions(): String {
+    private fun generateQueryForANDConditions(): String {
         var queryString = "("
-        var conditionsCount = 0
-        conditionsWithANDOperator.forEach { condition ->
-            if (conditionsCount != 0) {
+        conditionsWithANDOperator.forEachIndexed { index, condition ->
+            if (index != 0) {
                 queryString += " AND "
             }
             queryString += "(${condition.sanitizeValue()})"
-            conditionsCount++
         }
         queryString += ")"
         return queryString
